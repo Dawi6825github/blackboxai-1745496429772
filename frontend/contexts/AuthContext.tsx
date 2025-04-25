@@ -30,8 +30,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check if user is already logged in
     const checkAuth = async () => {
       try {
-        const response = await api.get('/api/user');
-        setUser(response.data);
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          const response = await api.get('/api/user');
+          setUser(response.data);
+        } else {
+          setUser(null);
+        }
       } catch (error) {
         setUser(null);
       } finally {
@@ -45,12 +51,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (username: string, password: string) => {
     setLoading(true);
     try {
-      await api.post('/api/login', { username, password });
-      const response = await api.get('/api/user');
-      setUser(response.data);
-      
+      const response = await api.post('/api/login', { username, password });
+      const { token, user } = response.data;
+      localStorage.setItem('auth_token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(user);
+
       // Redirect based on role
-      if (response.data.role === 'admin') {
+      if (user.role === 'admin') {
         router.push('/admin/dashboard');
       } else {
         router.push('/user/gameboard');
@@ -66,6 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await api.post('/api/logout');
+      localStorage.removeItem('auth_token');
+      delete api.defaults.headers.common['Authorization'];
       setUser(null);
       router.push('/auth/login');
     } catch (error) {
